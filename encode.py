@@ -1,10 +1,10 @@
 #!/usr/bin/env python3.1
 
-import os, json
+import os, json, time
 from tkinter import *
 import tkinter.filedialog as filedialog
 from tkinter.ttk import *
-from subprocess import call, PIPE
+from subprocess import call, PIPE, Popen, STDOUT
 from re import compile
 
 '''
@@ -232,6 +232,25 @@ class Job():
         
         self.tDel = []
     
+    def listen(self, a):
+
+        while a.poll() is None:
+            char = a.stdout.read(20)
+            #line = a.stdout.readline()
+            if char:
+                #print(char)
+                #print(char.decode())
+                #sys.stdout.write(char)
+                print(char.decode())
+                self.log.write(char.decode())
+            else:
+                a.stdout.flush()
+                return
+            #time.sleep(0)
+
+        self.log.write(a.stdout.read().decode())
+        a.stdout.flush()
+    
     def convertAudio(self):
         self.log.info('Converting audio for job %d.' % (self.id))
 
@@ -245,8 +264,9 @@ class Job():
                 self.log.warning('\tWav file already exists, skipping.')
             else:
                 eacCmd = '"%s" "%s" "%s" %s' % (p.eac3to, aName+'.pcm', aName+'.wav', self.s.pcmProperties)
-                eacExec = call(eacCmd)
-                #eacExec = call(eacCmd, stdout=PIPE)
+                #eacExec = call(eacCmd)
+                eacExec = Popen(eacCmd, stdout=PIPE, stderr=STDOUT)
+                self.listen(eacExec)
                 #print(eacExec)
             aExt = 'wav'
             self.aud = aName + '.' + aExt
@@ -259,7 +279,9 @@ class Job():
                 self.log.warning('\tAac file already exists, skipping.')
             else:
                 neroCmd = '"%s" -q %s -if "%s" -of "%s"' % (p.neroAacEnc, self.s.audioQuality, aName+'.wav', aName+'.aac')
-                neroExec = call(neroCmd)
+                print(neroCmd)
+                neroExec = Popen(neroCmd, stdout=PIPE, stderr=STDOUT)
+                self.listen(neroExec)
                 #neroExec = call(neroCmd, stdout=PIPE)
             aExt = 'aac'
             self.aud = aName + '.' + aExt
@@ -408,10 +430,11 @@ class Model(EventEmitter):
         job = self.jobs[i]
 
         if avs != None:
-            job.oAvs = avs
+            job.oAvs = os.path.normpath(avs)
+            job.path = os.path.dirname(job.oAvs)
 
         if audio != None:
-            job.aud = audio
+            job.aud = os.path.normpath(audio)
 
         if deleteTemp != None:
             job.s.deleteTemp = deleteTemp
@@ -455,6 +478,7 @@ class Model(EventEmitter):
         for j in self.jobs:
             j.createAvs()
             j.convertAudio()
+            return
             j.cutAudio()
             j.encode()
             j.delete()
@@ -600,6 +624,8 @@ class View(EventEmitter):
         #Used to tell the updated event handlers that 
         self.justSelected = [False for i in range(0,8)]
 
+        self.writeNum = 0
+
     def selectAvs(self, e=None):
         avsName = filedialog.askopenfilename(filetypes=[('Avisynth script', '*.avs'), ('Any', '*.*')])
         if avsName != None and len(avsName)>0:
@@ -653,7 +679,14 @@ class View(EventEmitter):
         print(e)
 
     def write(self, w):
-        print(w)
+        self.box.insert(END, w)
+
+        old = self.writeNum
+        self.writeNum = (self.writeNum + 1) % 16
+        
+        if self.writeNum < old:
+            self.root.update()
+            self.box.see(END)
 
     def jobEdited(self, o, t, mode):
         sel = self.jobs.focus()
