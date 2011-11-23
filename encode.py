@@ -477,6 +477,7 @@ class Model(EventEmitter):
             j.convertAudio()
             j.cutAudio()
             j.encode()
+            j.mux()
             j.delete()
 
 
