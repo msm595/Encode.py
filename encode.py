@@ -1,5 +1,6 @@
 #!/usr/bin/env python3.1
 
+
 import os, json, time
 from tkinter import *
 import tkinter.filedialog as filedialog
@@ -181,13 +182,13 @@ class Job():
 
         width, height = self.s.size
 
-        sName = ''.join(avs.split('.')[:-1])
+        sName = '.'.join(avs.split('.')[:-1])
         newAvsName = "%s %dp %sbit.avs" % (sName, height, self.s.bitDepth)
 
         if os.path.isfile(newAvsName):
             self.log.warning('\tAvs file already exists, skipping.')
             self.avs = newAvsName
-            self.name = ''.join(self.avs.split('.')[:-1])
+            self.name = '.'.join(self.oAvs.split('.')[:-1])
             self.tDel.append(self.avs)
             return
 
@@ -205,7 +206,7 @@ class Job():
             [output.write(l+"\n") for l in newAvs]
 
         self.avs = newAvsName
-        self.name = ''.join(self.avs.split('.')[:-1])
+        self.name = '.'.join(self.oAvs.split('.')[:-1])
         self.tDel.append(self.avs)
 
     def findAudio(self):
@@ -235,28 +236,16 @@ class Job():
     def listen(self, a):
 
         while a.poll() is None:
-            char = a.stdout.read(20)
-            #line = a.stdout.readline()
-            if char:
-                #print(char)
-                #print(char.decode())
-                #sys.stdout.write(char)
-                print(char.decode())
-                self.log.write(char.decode())
-            else:
-                a.stdout.flush()
-                return
-            #time.sleep(0)
+            time.sleep(0.5)
+            self.log.emit('updateGui')
 
-        self.log.write(a.stdout.read().decode())
-        a.stdout.flush()
     
     def convertAudio(self):
         self.log.info('Converting audio for job %d.' % (self.id))
 
         aS = self.aud.split('.')
         aExt = aS[-1].lower()
-        aName = ''.join(aS[:-1])
+        aName = '.'.join(aS[:-1])
 
         if aExt == 'pcm': #Audio needs to be extracted to wav
             self.log.info('\tConverting audio from pcm to wav.')
@@ -265,7 +254,7 @@ class Job():
             else:
                 eacCmd = '"%s" "%s" "%s" %s' % (p.eac3to, aName+'.pcm', aName+'.wav', self.s.pcmProperties)
                 #eacExec = call(eacCmd)
-                eacExec = Popen(eacCmd, stdout=PIPE, stderr=STDOUT)
+                eacExec = Popen(eacCmd, stdout=sys.stdout, stderr=sys.stderr)
                 self.listen(eacExec)
                 #print(eacExec)
             aExt = 'wav'
@@ -280,7 +269,7 @@ class Job():
             else:
                 neroCmd = '"%s" -q %s -if "%s" -of "%s"' % (p.neroAacEnc, self.s.audioQuality, aName+'.wav', aName+'.aac')
                 print(neroCmd)
-                neroExec = Popen(neroCmd, stdout=PIPE, stderr=STDOUT)
+                neroExec = Popen(neroCmd, stdout=sys.stdout, stderr=sys.stderr)
                 self.listen(neroExec)
                 #neroExec = call(neroCmd, stdout=PIPE)
             aExt = 'aac'
@@ -293,7 +282,7 @@ class Job():
 
         aS = self.aud.split('.')
         aExt = aS[-1].lower()
-        aName = ''.join(aS[:-1])
+        aName = '.'.join(aS[:-1])
 
         vfrCmd = '"%s" "%s" -i "%s" -o "%s" -f %s -c "%s" -vmr --ofps %s "%s"' % (p.python, p.vfr, aName+'.aac', aName+'.cut.mka', self.s.oFps, self.name+'.xml', self.s.fFps, self.avs)
         vfrExec = call(vfrCmd)
@@ -312,6 +301,8 @@ class Job():
 
         mp4File = "%s %dp %sbit.mp4" % (self.name, height, self.s.bitDepth)
 
+        print(mp4File)
+
         if os.path.isfile(mp4File):
             self.log.warning('\tMp4 file already exists, skipping.')
         else:
@@ -320,7 +311,9 @@ class Job():
             else:
                 x264Cmd = '"%s" "%s" -raw -o - | "%s" --demuxer raw --input-depth 16 --input-res %dx%d --fps %s --preset veryslow --tune animation --crf %d --bframes 8 --ref 16 --thread-input --threads auto --output "%s" -' % (p.avs2yuv, self.avs, p.x264_10, width, height, self.s.fFps, self.s.crf, mp4File)
             
-            x264Exec = call(x264Cmd, shell=True)
+            #x264Exec = call(x264Cmd, shell=True)
+            x264Exec = Popen(x264Cmd, shell=True, stdout=sys.stdout, stderr=sys.stderr)
+            self.listen(x264Exec)
             #x264Exec = call(x264Cmd, shell=True, stdout=PIPE)
     
     def mux(self):
@@ -340,7 +333,10 @@ class Job():
             chapters = ('--chapters "' + chapters + '"') if os.path.isfile(chapters) else ''
             mkvCmd = '"%s" -v -o "%s" %s --language 1:jpn --default-track 1:yes --compression 1:none -a 1 -D -S -T --no-global-tags --no-chapters "%s"\
             --language 1:jpn --default-track 1:yes --compression 1:none -d 1 -A -S -T --no-global-tags --no-chapters "%s"' % (p.mkvmerge, mkvFile, chapters, self.aud, mp4File)
-            mkvExec = call(mkvCmd, stdout=PIPE) 
+            #mkvExec = call(mkvCmd, stdout=PIPE) 
+            mkvExec = Popen(mkvCmd, stdout=sys.stdout, stderr=sys.stderr)
+            self.listen(mkvExec)
+            mkvExec = mkvExec.poll()
             if mkvExec == 0:
                 self.info('File %s sucessfully muxed' % (mkvName))
 
@@ -374,7 +370,7 @@ class Model(EventEmitter):
         self.log.on('info', self.info)
         self.log.on('warning', self.warning)
         self.log.on('error', self.error)
-        self.log.on('write', self.write)
+        self.log.on('updateGui', self.updateGui)
 
         #self.log.on('needAudioSelection', self.selectAudio)
     
@@ -387,8 +383,8 @@ class Model(EventEmitter):
     def error(self, msg):
         self.emit('error', msg)
 
-    def write(self, msg):
-        self.emit('write', msg)
+    def updateGui(self):
+        self.emit('updateGui')
 
     def addJob(self, avs):
         # i = self.findJob(avs)
@@ -432,6 +428,7 @@ class Model(EventEmitter):
         if avs != None:
             job.oAvs = os.path.normpath(avs)
             job.path = os.path.dirname(job.oAvs)
+            job.name = '.'.join(job.oAvs.split('.')[:-1])
 
         if audio != None:
             job.aud = os.path.normpath(audio)
@@ -478,7 +475,6 @@ class Model(EventEmitter):
         for j in self.jobs:
             j.createAvs()
             j.convertAudio()
-            return
             j.cutAudio()
             j.encode()
             j.delete()
@@ -670,23 +666,35 @@ class View(EventEmitter):
         #print(list)
     
     def info(self, i):
+        w = '[ERROR] ' + i
+        self.box.insert(END, i+'\n')
         print(i)
     
     def warning(self, w):
+        w = '[ERROR] ' + w
+        self.box.insert(END, w+'\n')
         print(w)
     
     def error(self, e):
+        w = '[ERROR] ' + e
+        self.box.insert(END, e+'\n')
         print(e)
 
     def write(self, w):
         self.box.insert(END, w)
 
-        old = self.writeNum
-        self.writeNum = (self.writeNum + 1) % 16
-        
-        if self.writeNum < old:
-            self.root.update()
-            self.box.see(END)
+        self.root.update()
+        self.box.see(END)
+
+        #old = self.writeNum
+        #self.writeNum = (self.writeNum + 1) % 16
+
+        # if self.writeNum < old:
+        #     self.root.update()
+        #     self.box.see(END)
+    
+    def updateGui(self):
+        self.root.update()
 
     def jobEdited(self, o, t, mode):
         sel = self.jobs.focus()
@@ -787,14 +795,13 @@ class Controller():
         self._view.on('encode', self._model.runJobs)
 
         self._model.on('jobList', self._view.jobList)
+        self._model.on('updateGui', self._view.updateGui)
         #self._model.on('needAudioSelection', self._view.selectAudio)
 
         self._model.on('info', self._view.info)
         self._model.on('warning', self._view.warning)
         self._model.on('error', self._view.error)
         self._model.on('write', self._view.write)
-
-        self._model.log.info('Info test')
 
         self._view.run()
     
