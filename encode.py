@@ -338,7 +338,7 @@ class Job():
             self.listen(mkvExec)
             mkvExec = mkvExec.poll()
             if mkvExec == 0:
-                self.info('File %s sucessfully muxed' % (mkvName))
+                self.info('File %s sucessfully muxed' % (mkvFile))
 
     def __str__(self):
         return "%d %s crf:%d %dbit %dp" % (self.id, self.avs, self.s.crf, self.s.bitDepth, self.s.size[1])
