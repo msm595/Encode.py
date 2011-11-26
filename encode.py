@@ -338,7 +338,7 @@ class Job():
             self.listen(mkvExec)
             mkvExec = mkvExec.poll()
             if mkvExec == 0:
-                self.info('File %s sucessfully muxed' % (mkvFile))
+                self.log.info('File %s sucessfully muxed' % (mkvFile))
 
     def __str__(self):
         return "%d %s crf:%d %dbit %dp" % (self.id, self.avs, self.s.crf, self.s.bitDepth, self.s.size[1])
@@ -684,8 +684,8 @@ class View(EventEmitter):
     def write(self, w):
         self.box.insert(END, w)
 
-        self.root.update()
         self.box.see(END)
+        self.root.update()
 
         #old = self.writeNum
         #self.writeNum = (self.writeNum + 1) % 16
